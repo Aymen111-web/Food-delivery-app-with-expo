@@ -1,19 +1,36 @@
+
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCart } from '../../../context/cart';
-import { useData } from '../../../context/data';
-import { Colors } from '../../../services/mock_api';
+import { useData } from '../../../context/data'; // MenuItem type alias from data context
+import { Colors } from '../../../services/mock_api'; // Keep colors for now
 
 export default function RestaurantDetailsScreen() {
     const { id } = useLocalSearchParams();
-    const { restaurants } = useData();
+    const { restaurants, fetchRestaurantMenu } = useData();
     const { addItem } = useCart();
     const router = useRouter();
 
-    const restaurant = restaurants.find(r => r.id === id);
+    // Convert id to string safely
+    const restaurantId = Array.isArray(id) ? id[0] : id;
+
+    const restaurant = restaurants.find(r => r.id === restaurantId);
+
+    // Menu state
+    const [menu, setMenu] = useState<any[]>([]); // Use any temporarily or FoodItem from services
+    const [loadingMenu, setLoadingMenu] = useState(true);
+
+    useEffect(() => {
+        if (restaurantId) {
+            fetchRestaurantMenu(restaurantId).then(items => {
+                setMenu(items);
+                setLoadingMenu(false);
+            });
+        }
+    }, [restaurantId]);
 
     if (!restaurant) {
         return (
@@ -28,7 +45,7 @@ export default function RestaurantDetailsScreen() {
         );
     }
 
-    const renderMenuItem = (item: MenuItem) => (
+    const renderMenuItem = (item: any) => (
         <View key={item.id} style={styles.menuItem}>
             <View style={styles.menuItemInfo}>
                 <Text style={styles.menuItemName}>{item.name}</Text>
@@ -52,9 +69,6 @@ export default function RestaurantDetailsScreen() {
         </View>
     );
 
-    // Group items by category (optional, but requested "View food categories and menus")
-    // For now, we'll just list them as the mock data structure is flat inside restaurant
-
     return (
         <View style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
@@ -71,7 +85,7 @@ export default function RestaurantDetailsScreen() {
                         <View style={styles.metaRow}>
                             <View style={styles.ratingBadge}>
                                 <Ionicons name="star" size={14} color="#000" />
-                                <Text style={styles.ratingText}>{restaurant.rating}</Text>
+                                <Text style={styles.ratingText}>{restaurant.rating || 'N/A'}</Text>
                             </View>
                             <Text style={styles.metaText}>• {restaurant.deliveryTime} • {restaurant.categories.join(', ')}</Text>
                         </View>
@@ -81,7 +95,11 @@ export default function RestaurantDetailsScreen() {
                 {/* Menu Section */}
                 <View style={styles.menuSection}>
                     <Text style={styles.sectionTitle}>Menu</Text>
-                    {restaurant.menu.map(renderMenuItem)}
+                    {loadingMenu ? (
+                        <ActivityIndicator color={Colors.primary} />
+                    ) : (
+                        menu.map(renderMenuItem)
+                    )}
                 </View>
             </ScrollView>
 

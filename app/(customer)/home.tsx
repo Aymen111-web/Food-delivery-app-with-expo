@@ -1,5 +1,6 @@
 
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,8 +19,7 @@ export default function HomeScreen() {
 
     const filteredRestaurants = restaurants.filter((r) => {
         const matchesCategory = selectedCategory ? r.categories.includes(selectedCategory) : true;
-        const matchesSearch = r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            r.menu.some(m => m.name.toLowerCase().includes(searchQuery.toLowerCase()));
+        const matchesSearch = r.name.toLowerCase().includes(searchQuery.toLowerCase());
         return matchesCategory && matchesSearch;
     });
 
@@ -42,32 +42,8 @@ export default function HomeScreen() {
                     {item.categories.join(', ')} • {item.deliveryTime}
                 </Text>
 
-                {/* Quick Menu Preview */}
-                <View style={styles.menuPreview}>
-                    <Text style={styles.menuTitle}>Popular Items:</Text>
-                    {item.menu.slice(0, 2).map((menuItem) => (
-                        <View key={menuItem.id} style={styles.menuItem}>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.menuItemName}>{menuItem.name}</Text>
-                                <Text style={styles.menuItemPrice}>${menuItem.price.toFixed(2)}</Text>
-                            </View>
-                            <TouchableOpacity
-                                style={styles.addButton}
-                                onPress={() => {
-                                    addItem({
-                                        menuItemId: menuItem.id,
-                                        restaurantId: item.id,
-                                        name: menuItem.name,
-                                        price: menuItem.price,
-                                        quantity: 1,
-                                    });
-                                }}
-                            >
-                                <Ionicons name="add" size={20} color="#fff" />
-                            </TouchableOpacity>
-                        </View>
-                    ))}
-                </View>
+
+                {/* Menu Preview Removed for Performance (Data loaded on demand) */}
             </View>
         </TouchableOpacity>
     );

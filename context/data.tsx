@@ -1,212 +1,130 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { MOCK_CATEGORIES, MOCK_RESTAURANTS } from '../services/mock_api';
+import {
+    addFood as addFoodService,
+    addRestaurant as addRestaurantService,
+    Category,
+    createOrder as createOrderService,
+    deleteRestaurant as deleteRestaurantService,
+    Restaurant as FirestoreRestaurant,
+    FoodItem,
+    getCategories,
+    getFoodsByRestaurant,
+    getRestaurants,
+    Order,
+    subscribeToAllOrders,
+    subscribeToUserOrders,
+    updateOrderStatusService,
+    UserProfile
+} from '../services/firestore';
+import { useAuth } from './auth';
 
-// --- Types ---
-export interface MenuItem {
-    id: string;
-    name: string;
-    price: number;
-    description: string;
-    category: string;
-    available?: boolean;
-    image?: string;
-}
-
-export interface Restaurant {
-    id: string;
-    name: string;
-    rating: number;
-    categories: string[];
-    deliveryTime: string;
-    image: string;
-    menu: MenuItem[];
-}
-
-export interface Category {
-    id: string;
-    name: string;
-    icon: string;
-}
-
-export type OrderStatus = 'Pending' | 'Preparing' | 'On the way' | 'Delivered' | 'Cancelled';
-
-export interface OrderItem {
-    menuItemId: string;
-    name: string;
-    quantity: number;
-    price: number;
-}
-
-export interface Order {
-    id: string;
-    userId: string;
-    userName: string;
-    restaurantId: string;
-    restaurantName: string;
-    items: OrderItem[];
-    totalAmount: number;
-    status: OrderStatus;
-    date: Date;
-    address: string;
-}
-
-export interface UserProfile {  // Extension of Auth User basically
-    id: string;
-    name: string;
-    email: string;
-    role: 'user' | 'admin';
-    active: boolean;
-    phone?: string;
-    address?: string;
+// Extend FirestoreRestaurant for UI (initially just alias, but we might add menu back conceptually if needed)
+export interface Restaurant extends FirestoreRestaurant {
+    // Menu is fetched separately, but we might cache it here if needed.
+    // For now, let's assume components fetch menu when needed.
 }
 
 interface DataContextType {
     restaurants: Restaurant[];
     categories: Category[];
     orders: Order[];
-    users: UserProfile[]; // For admin management
+    users: UserProfile[];
 
-    // Restaurant Actions
-    addRestaurant: (r: Omit<Restaurant, 'id'>) => void;
-    updateRestaurant: (id: string, r: Partial<Restaurant>) => void;
-    deleteRestaurant: (id: string) => void;
-
-    // Menu Actions
-    addMenuItem: (restaurantId: string, item: Omit<MenuItem, 'id'>) => void;
-    updateMenuItem: (restaurantId: string, itemId: string, item: Partial<MenuItem>) => void;
-    deleteMenuItem: (restaurantId: string, itemId: string) => void;
-
-    // Order Actions
-    placeOrder: (order: Omit<Order, 'id' | 'date' | 'status'>) => void;
-    updateOrderStatus: (orderId: string, status: OrderStatus) => void;
-
-    // User Actions
-    updateUserProfile: (userId: string, data: Partial<UserProfile>) => void;
-    toggleUserStatus: (userId: string) => void; // Activate/Deactivate
-
-    // Initializer
+    // Actions
+    addRestaurant: (r: any) => Promise<void>;
+    deleteRestaurant: (id: string) => Promise<void>;
+    addMenuItem: (restaurantId: string, item: any) => Promise<void>;
+    placeOrder: (order: any) => Promise<void>;
+    updateOrderStatus: (orderId: string, status: any) => Promise<void>;
     refreshData: () => void;
+
+    // New Helper
+    fetchRestaurantMenu: (restaurantId: string) => Promise<FoodItem[]>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export function DataProvider({ children }: { children: React.ReactNode }) {
-    const [restaurants, setRestaurants] = useState<Restaurant[]>(MOCK_RESTAURANTS);
-    const [categories, setCategories] = useState<Category[]>(MOCK_CATEGORIES);
+    const { user } = useAuth();
+    const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
     const [orders, setOrders] = useState<Order[]>([]);
-    const [users, setUsers] = useState<UserProfile[]>([]);
+    const [users, setUsers] = useState<UserProfile[]>([]); // Admin only usually
 
-    // We can simulate some initial orders if we want
+    const refreshData = async () => {
+        try {
+            const r = await getRestaurants();
+            const c = await getCategories();
+            setRestaurants(r);
+            setCategories(c);
+        } catch (e) {
+            console.error("Error fetching data", e);
+        }
+    };
+
     useEffect(() => {
-        // Mock some initial orders
-        setOrders([
-            {
-                id: 'ord_1',
-                userId: 'user_1',
-                userName: 'John Doe',
-                restaurantId: '1',
-                restaurantName: 'Burger Bistro',
-                items: [{ menuItemId: '101', name: 'Classic Cheeseburger', quantity: 2, price: 12.99 }],
-                totalAmount: 25.98,
-                status: 'Preparing',
-                date: new Date(),
-                address: '123 Main St'
-            }
-        ]);
-
-        // Mock some users (synced conceptually with Auth, but stored here for Admin view)
-        setUsers([
-            { id: 'user_admin', name: 'Admin User', email: 'admin@test.com', role: 'admin', active: true },
-            { id: 'user_1', name: 'John Doe', email: 'john@test.com', role: 'user', active: true, phone: '555-0100', address: '123 Main St' }
-        ]);
+        refreshData();
     }, []);
 
-    // --- Actions ---
+    // Subscribe to Orders based on Role
+    useEffect(() => {
+        if (!user) {
+            setOrders([]);
+            return;
+        }
 
-    const addRestaurant = (r: Omit<Restaurant, 'id'>) => {
-        const newR = { ...r, id: Math.random().toString(36).substr(2, 9) };
-        setRestaurants(prev => [...prev, newR]);
-    };
+        let unsubscribe: () => void;
 
-    const updateRestaurant = (id: string, r: Partial<Restaurant>) => {
-        setRestaurants(prev => prev.map(item => item.id === id ? { ...item, ...r } : item));
-    };
+        if (user.role === 'admin') {
+            unsubscribe = subscribeToAllOrders((newOrders) => {
+                setOrders(newOrders);
+            });
+        } else {
+            unsubscribe = subscribeToUserOrders(user.id, (newOrders) => {
+                setOrders(newOrders);
+            });
+        }
 
-    const deleteRestaurant = (id: string) => {
-        setRestaurants(prev => prev.filter(item => item.id !== id));
-    };
-
-    const addMenuItem = (restaurantId: string, item: Omit<MenuItem, 'id'>) => {
-        const newItem = { ...item, id: Math.random().toString(36).substr(2, 9) };
-        setRestaurants(prev => prev.map(r => {
-            if (r.id === restaurantId) {
-                return { ...r, menu: [...(r.menu || []), newItem] };
-            }
-            return r;
-        }));
-    };
-
-    const updateMenuItem = (restaurantId: string, itemId: string, item: Partial<MenuItem>) => {
-        setRestaurants(prev => prev.map(r => {
-            if (r.id === restaurantId) {
-                return {
-                    ...r,
-                    menu: r.menu.map(m => m.id === itemId ? { ...m, ...item } : m)
-                };
-            }
-            return r;
-        }));
-    };
-
-    const deleteMenuItem = (restaurantId: string, itemId: string) => {
-        setRestaurants(prev => prev.map(r => {
-            if (r.id === restaurantId) {
-                return {
-                    ...r,
-                    menu: r.menu.filter(m => m.id !== itemId)
-                };
-            }
-            return r;
-        }));
-    };
-
-    const placeOrder = (order: Omit<Order, 'id' | 'date' | 'status'>) => {
-        const newOrder: Order = {
-            ...order,
-            id: 'ord_' + Math.random().toString(36).substr(2, 9),
-            date: new Date(),
-            status: 'Pending'
+        return () => {
+            if (unsubscribe) unsubscribe();
         };
-        setOrders(prev => [newOrder, ...prev]);
+    }, [user]);
+
+    const addRestaurant = async (r: any) => {
+        await addRestaurantService(r);
+        refreshData();
     };
 
-    const updateOrderStatus = (orderId: string, status: OrderStatus) => {
-        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+    const deleteRestaurant = async (id: string) => {
+        await deleteRestaurantService(id);
+        refreshData();
     };
 
-    const updateUserProfile = (userId: string, data: Partial<UserProfile>) => {
-        setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...data } : u));
+    const addMenuItem = async (restaurantId: string, item: any) => {
+        await addFoodService({ ...item, restaurantId, isAvailable: true });
     };
 
-    const toggleUserStatus = (userId: string) => {
-        setUsers(prev => prev.map(u => u.id === userId ? { ...u, active: !u.active } : u));
+    const placeOrder = async (order: any) => {
+        await createOrderService(order);
     };
 
-    const refreshData = () => {
-        // Reset to mocks if needed
-        setRestaurants(MOCK_RESTAURANTS);
-        setCategories(MOCK_CATEGORIES);
+    const updateOrderStatus = async (orderId: string, status: any) => {
+        await updateOrderStatusService(orderId, status);
+    };
+
+    const fetchRestaurantMenu = async (restaurantId: string) => {
+        return await getFoodsByRestaurant(restaurantId);
     };
 
     return (
         <DataContext.Provider value={{
             restaurants, categories, orders, users,
-            addRestaurant, updateRestaurant, deleteRestaurant,
-            addMenuItem, updateMenuItem, deleteMenuItem,
+            addRestaurant, deleteRestaurant,
+            addMenuItem,
             placeOrder, updateOrderStatus,
-            updateUserProfile, toggleUserStatus,
-            refreshData
+            refreshData,
+            fetchRestaurantMenu
         }}>
             {children}
         </DataContext.Provider>
