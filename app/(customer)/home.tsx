@@ -86,9 +86,9 @@ export default function HomeScreen() {
                         >
                             <Text style={[styles.categoryText, !selectedCategory && styles.categoryTextActive]}>All</Text>
                         </TouchableOpacity>
-                        {categories.map((cat) => (
+                        {categories.map((cat, index) => (
                             <TouchableOpacity
-                                key={cat.id}
+                                key={`${cat.id}-${index}`}
                                 style={[styles.categoryChip, selectedCategory === cat.name && styles.categoryChipActive]}
                                 onPress={() => setSelectedCategory(cat.name === selectedCategory ? null : cat.name)}
                             >

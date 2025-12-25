@@ -68,7 +68,7 @@ export default function OrdersScreen() {
 
             <View style={styles.itemsList}>
                 {item.items.map((food, idx) => (
-                    <Text key={idx} style={styles.itemText}>
+                    <Text key={`${item.id}-${food.foodId}-${idx}`} style={styles.itemText}>
                         {food.quantity}x {food.name} (${food.price})
                     </Text>
                 ))}

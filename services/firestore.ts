@@ -106,7 +106,7 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
 
 export const getAllUsers = async () => {
     const snapshot = await getDocs(usersRef);
-    return snapshot.docs.map(doc => ({ ...doc.data() } as UserProfile));
+    return snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
 };
 
 export const toggleUserStatus = async (uid: string, isActive: boolean) => {

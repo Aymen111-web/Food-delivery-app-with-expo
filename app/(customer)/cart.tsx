@@ -45,7 +45,7 @@ export default function CartScreen() {
                 restaurantId,
                 restaurantName,
                 items: restaurantItems.map(i => ({
-                    menuItemId: i.menuItemId,
+                    foodId: i.menuItemId,
                     name: i.name,
                     quantity: i.quantity,
                     price: i.price
