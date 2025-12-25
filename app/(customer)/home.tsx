@@ -13,7 +13,7 @@ export default function HomeScreen() {
     const router = useRouter();
     const { user } = useAuth();
     const { addItem } = useCart();
-    const { restaurants, categories } = useData();
+    const { restaurants, categories, allFoods } = useData();
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -96,6 +96,40 @@ export default function HomeScreen() {
                             </TouchableOpacity>
                         ))}
                     </ScrollView>
+
+                    {/* Search Results (Foods) */}
+                    {searchQuery.length > 0 && (
+                        <View>
+                            <View style={styles.sectionHeader}>
+                                <Text style={styles.sectionTitle}>Found Foods</Text>
+                            </View>
+                            {allFoods.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase())).map(food => (
+                                <View key={food.id} style={styles.foodResultItem}>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.foodResultName}>{food.name}</Text>
+                                        <Text style={styles.foodResultDesc} numberOfLines={1}>{food.description}</Text>
+                                        <Text style={styles.foodResultPrice}>${food.price}</Text>
+                                    </View>
+                                    {food.image && <Image source={{ uri: food.image }} style={styles.foodResultImage} />}
+                                    <TouchableOpacity
+                                        style={styles.addButton}
+                                        onPress={() => addItem({
+                                            menuItemId: food.id,
+                                            name: food.name,
+                                            price: food.price,
+                                            restaurantId: food.restaurantId,
+                                            quantity: 1
+                                        })}
+                                    >
+                                        <Ionicons name="add" size={20} color="#fff" />
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                            {allFoods.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+                                <Text style={{ textAlign: 'center', color: Colors.textLight, marginVertical: 10 }}>No foods found.</Text>
+                            )}
+                        </View>
+                    )}
 
                     {/* Restaurants */}
                     <View style={styles.sectionHeader}>
@@ -298,5 +332,39 @@ const styles = StyleSheet.create({
     emptyText: {
         color: Colors.textLight,
         textAlign: 'center',
+    },
+    foodResultItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.card,
+        marginHorizontal: 20,
+        marginBottom: 10,
+        padding: 10,
+        borderRadius: 12,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOpacity: 0.05,
+        shadowRadius: 5,
+    },
+    foodResultImage: {
+        width: 60,
+        height: 60,
+        borderRadius: 8,
+        marginHorizontal: 10,
+    },
+    foodResultName: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: Colors.text,
+    },
+    foodResultDesc: {
+        fontSize: 12,
+        color: Colors.textLight,
+    },
+    foodResultPrice: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: Colors.primary,
+        marginTop: 4,
     }
 });

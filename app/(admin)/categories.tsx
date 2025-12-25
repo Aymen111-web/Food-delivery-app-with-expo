@@ -4,13 +4,16 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, MOCK_CATEGORIES } from '../../services/mock_api';
+import { useData } from '../../context/data';
+import { Category } from '../../services/firestore';
+import { Colors } from '../../services/mock_api';
 
 export default function AdminCategories() {
-    const [categories, setCategories] = useState(MOCK_CATEGORIES);
+    const { categories, addCategory, deleteCategory, updateCategory } = useData();
     const router = useRouter();
     const [newCategory, setNewCategory] = useState('');
     const [isAdding, setIsAdding] = useState(false);
+    const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
     const handleDelete = (id: string, name: string) => {
         Alert.alert(
@@ -21,23 +24,41 @@ export default function AdminCategories() {
                 {
                     text: "Delete",
                     style: "destructive",
-                    onPress: () => {
-                        setCategories(prev => prev.filter(c => c.id !== id));
+                    onPress: async () => {
+                        await deleteCategory(id);
                     }
                 }
             ]
         );
     };
 
-    const handleAdd = () => {
+    const handleSave = async () => {
         if (!newCategory.trim()) return;
-        const newId = Math.random().toString(36).substr(2, 9);
-        setCategories([...categories, { id: newId, name: newCategory, icon: 'fast-food' }]);
+
+        if (editingCategory) {
+            await updateCategory(editingCategory.id, newCategory);
+            setEditingCategory(null);
+        } else {
+            await addCategory(newCategory);
+        }
+
         setNewCategory('');
         setIsAdding(false);
     };
 
-    const renderItem = ({ item }: { item: typeof MOCK_CATEGORIES[0] }) => (
+    const startEdit = (item: Category) => {
+        setNewCategory(item.name);
+        setEditingCategory(item);
+        setIsAdding(true);
+    };
+
+    const cancelEdit = () => {
+        setNewCategory('');
+        setEditingCategory(null);
+        setIsAdding(false);
+    };
+
+    const renderItem = ({ item }: { item: Category }) => (
         <View style={styles.card}>
             <View style={styles.info}>
                 <View style={styles.iconBox}>
@@ -46,7 +67,10 @@ export default function AdminCategories() {
                 <Text style={styles.name}>{item.name}</Text>
             </View>
             <View style={styles.actions}>
-                <TouchableOpacity style={[styles.actionBtn, styles.editBtn]}>
+                <TouchableOpacity
+                    style={[styles.actionBtn, styles.editBtn]}
+                    onPress={() => startEdit(item)}
+                >
                     <Ionicons name="pencil" size={18} color="#fff" />
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -66,7 +90,10 @@ export default function AdminCategories() {
                     <Ionicons name="arrow-back" size={24} color={Colors.text} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Manage Categories</Text>
-                <TouchableOpacity style={styles.addBtn} onPress={() => setIsAdding(!isAdding)}>
+                <TouchableOpacity style={styles.addBtn} onPress={() => {
+                    if (isAdding) cancelEdit();
+                    else setIsAdding(true);
+                }}>
                     <Ionicons name={isAdding ? "close" : "add"} size={24} color="#fff" />
                 </TouchableOpacity>
             </View>
@@ -75,12 +102,13 @@ export default function AdminCategories() {
                 <View style={styles.addContainer}>
                     <TextInput
                         style={styles.input}
-                        placeholder="Category Name"
+                        placeholder={editingCategory ? "Edit Category Name" : "New Category Name"}
                         value={newCategory}
                         onChangeText={setNewCategory}
+                        autoFocus
                     />
-                    <TouchableOpacity style={styles.saveBtn} onPress={handleAdd}>
-                        <Text style={styles.saveBtnText}>Save</Text>
+                    <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+                        <Text style={styles.saveBtnText}>{editingCategory ? "Update" : "Save"}</Text>
                     </TouchableOpacity>
                 </View>
             )}

@@ -3,8 +3,11 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { FlatList, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Order, OrderStatus, useData } from '../../context/data';
+import { useData } from '../../context/data';
+import { Order } from '../../services/firestore';
 import { Colors } from '../../services/mock_api';
+
+type OrderStatus = 'Pending' | 'Preparing' | 'On the way' | 'Delivered' | 'Cancelled';
 
 const ORDER_STATUSES: OrderStatus[] = ['Pending', 'Preparing', 'On the way', 'Delivered', 'Cancelled'];
 
@@ -36,7 +39,7 @@ export default function AdminOrders() {
         <TouchableOpacity style={styles.card} onPress={() => setSelectedOrder(item)}>
             <View style={styles.cardHeader}>
                 <Text style={styles.orderId}>{item.id}</Text>
-                <Text style={styles.date}>{new Date(item.date).toLocaleString()}</Text>
+                <Text style={styles.date}>{new Date(item.createdAt).toLocaleString()}</Text>
             </View>
             <View style={styles.cardBody}>
                 <View>

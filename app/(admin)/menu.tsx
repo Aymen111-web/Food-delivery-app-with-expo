@@ -1,24 +1,33 @@
+
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useData } from '../../context/data';
+import { FoodItem } from '../../services/firestore';
 import { Colors } from '../../services/mock_api';
 
 export default function AdminMenu() {
-    const { restaurants, deleteMenuItem, addMenuItem } = useData();
-    // Flatten all menu items for demo purposes, including restaurantId
-    const allItems = restaurants.flatMap(r => r.menu.map(m => ({ ...m, restaurant: r.name, restaurantId: r.id })));
-
-    // In a real app we might filter locally, but for now we derive from 'restaurants' which changes.
-    // However, if we put 'allItems' in state, it won't update when 'restaurants' updates unless we use useEffect or just derive it on render.
-    // Deriving on render is safer for small lists.
-
-    const [searchQuery, setSearchQuery] = useState('');
+    const { allFoods, restaurants, deleteMenuItem, updateMenuItem, addMenuItem } = useData();
     const router = useRouter();
+    const [searchQuery, setSearchQuery] = useState('');
 
-    const handleDelete = (restaurantId: string, itemId: string, name: string) => {
+    // Edit/Add State
+    const [modalVisible, setModalVisible] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [currentItem, setCurrentItem] = useState<Partial<FoodItem>>({});
+
+    const filteredItems = allFoods.filter(i =>
+        i.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (i.restaurantId && restaurants.find(r => r.id === i.restaurantId)?.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
+
+    const getRestaurantName = (id: string) => {
+        return restaurants.find(r => r.id === id)?.name || "Unknown Restaurant";
+    };
+
+    const handleDelete = (id: string, name: string) => {
         Alert.alert(
             "Delete Item",
             `Are you sure you want to delete ${name}?`,
@@ -27,60 +36,85 @@ export default function AdminMenu() {
                 {
                     text: "Delete",
                     style: "destructive",
-                    onPress: () => {
-                        deleteMenuItem(restaurantId, itemId);
-                        Alert.alert("Success", "Item deleted");
+                    onPress: async () => {
+                        await deleteMenuItem(id);
                     }
                 }
             ]
         );
     };
 
-    const handleAdd = () => {
-        if (restaurants.length === 0) {
-            Alert.alert("Error", "No restaurants available to add menu items to.");
+    const handleInitialAdd = () => {
+        setIsEditing(false);
+        setCurrentItem({
+            name: '',
+            price: 0,
+            description: '',
+            categoryId: '',
+            restaurantId: restaurants.length > 0 ? restaurants[0].id : '',
+            isAvailable: true
+        });
+        setModalVisible(true);
+    };
+
+    const handleInitialEdit = (item: FoodItem) => {
+        setIsEditing(true);
+        setCurrentItem({ ...item });
+        setModalVisible(true);
+    };
+
+    const saveItem = async () => {
+        if (!currentItem.name || !currentItem.price || !currentItem.restaurantId) {
+            Alert.alert("Error", "Please fill Name, Price and select Restaurant");
             return;
         }
-        // Add to the first restaurant for demo
-        addMenuItem(restaurants[0].id, {
-            name: "New Menu Item " + Math.floor(Math.random() * 100),
-            price: 9.99,
-            description: "Freshly added item",
-            category: "New"
-        });
-        Alert.alert("Success", `Added item to ${restaurants[0].name}`);
+
+        try {
+            if (isEditing && currentItem.id) {
+                await updateMenuItem(currentItem.id, currentItem);
+            } else {
+                await addMenuItem(currentItem.restaurantId!, {
+                    ...currentItem,
+                    image: currentItem.image || 'https://via.placeholder.com/150'
+                });
+            }
+            setModalVisible(false);
+        } catch (e) {
+            console.error(e);
+            Alert.alert("Error", "Failed to save item");
+        }
     };
 
-    const toggleAvailability = (id: string) => {
-        // Toggle logic if we had it in context
-        Alert.alert("Info", "Availability toggle not fully implemented in context yet");
+    const toggleAvailability = async (item: FoodItem) => {
+        await updateMenuItem(item.id, { isAvailable: !item.isAvailable });
     };
 
-    const filteredItems = allItems.filter(i =>
-        i.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        i.restaurant.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
-    const renderItem = ({ item }: { item: typeof allItems[0] }) => (
+    const renderItem = ({ item }: { item: FoodItem }) => (
         <View style={styles.card}>
             <View style={styles.info}>
                 <Text style={styles.name}>{item.name}</Text>
-                <Text style={styles.restaurant}>{item.restaurant}</Text>
-                <Text style={styles.price}>${item.price.toFixed(2)}</Text>
+                <Text style={styles.restaurant}>{getRestaurantName(item.restaurantId)}</Text>
+                <Text style={styles.price}>${item.price}</Text>
+                <Text style={{ color: item.isAvailable ? Colors.success : Colors.error, fontSize: 12 }}>
+                    {item.isAvailable ? "Available" : "Unavailable"}
+                </Text>
             </View>
             <View style={styles.actions}>
                 <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: Colors.success }]}
-                    onPress={() => toggleAvailability(item.id)}
+                    style={[styles.actionBtn, { backgroundColor: item.isAvailable ? Colors.warning : Colors.success }]}
+                    onPress={() => toggleAvailability(item)}
                 >
-                    <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+                    <Ionicons name={item.isAvailable ? "ban" : "checkmark"} size={20} color="#fff" />
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.actionBtn, styles.editBtn]}>
+                <TouchableOpacity
+                    style={[styles.actionBtn, styles.editBtn]}
+                    onPress={() => handleInitialEdit(item)}
+                >
                     <Ionicons name="pencil" size={20} color="#fff" />
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={[styles.actionBtn, styles.deleteBtn]}
-                    onPress={() => handleDelete(item.restaurantId, item.id, item.name)}
+                    onPress={() => handleDelete(item.id, item.name)}
                 >
                     <Ionicons name="trash" size={20} color="#fff" />
                 </TouchableOpacity>
@@ -95,7 +129,7 @@ export default function AdminMenu() {
                     <Ionicons name="arrow-back" size={24} color={Colors.text} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Manage Menu Items</Text>
-                <TouchableOpacity style={styles.addBtn} onPress={handleAdd}>
+                <TouchableOpacity style={styles.addBtn} onPress={handleInitialAdd}>
                     <Ionicons name="add" size={24} color="#fff" />
                 </TouchableOpacity>
             </View>
@@ -116,6 +150,70 @@ export default function AdminMenu() {
                 contentContainerStyle={styles.list}
                 renderItem={renderItem}
             />
+
+            {/* Edit/Add Modal */}
+            <Modal visible={modalVisible} animationType="slide" transparent>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>{isEditing ? "Edit Item" : "New Item"}</Text>
+                        <ScrollView>
+                            <Text style={styles.label}>Name</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={currentItem.name}
+                                onChangeText={t => setCurrentItem({ ...currentItem, name: t })}
+                            />
+
+                            <Text style={styles.label}>Price</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={currentItem.price?.toString()}
+                                keyboardType="numeric"
+                                onChangeText={t => setCurrentItem({ ...currentItem, price: parseFloat(t) || 0 })}
+                            />
+
+                            <Text style={styles.label}>Description</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={currentItem.description}
+                                onChangeText={t => setCurrentItem({ ...currentItem, description: t })}
+                            />
+
+                            {/* Simple Restaurant Picker (just ID for now) */}
+                            {!isEditing && (
+                                <>
+                                    <Text style={styles.label}>Restaurant ID (Manual for now)</Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        value={currentItem.restaurantId}
+                                        placeholder={restaurants[0]?.id}
+                                        onChangeText={t => setCurrentItem({ ...currentItem, restaurantId: t })}
+                                    />
+                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: 10 }}>
+                                        {restaurants.map(r => (
+                                            <TouchableOpacity
+                                                key={r.id}
+                                                onPress={() => setCurrentItem({ ...currentItem, restaurantId: r.id })}
+                                                style={{ padding: 5, backgroundColor: currentItem.restaurantId === r.id ? Colors.primary : '#ddd', borderRadius: 5 }}
+                                            >
+                                                <Text style={{ color: currentItem.restaurantId === r.id ? '#fff' : '#000', fontSize: 10 }}>{r.name}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                </>
+                            )}
+                        </ScrollView>
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.cancelBtn}>
+                                <Text style={styles.cancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={saveItem} style={styles.saveModalBtn}>
+                                <Text style={styles.saveText}>Save</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -206,6 +304,7 @@ const styles = StyleSheet.create({
     actions: {
         flexDirection: 'row',
         gap: 8,
+        alignItems: 'center'
     },
     actionBtn: {
         width: 36,
@@ -220,4 +319,57 @@ const styles = StyleSheet.create({
     deleteBtn: {
         backgroundColor: Colors.error,
     },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        padding: 20
+    },
+    modalContent: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 20,
+        maxHeight: '80%'
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        marginBottom: 20,
+        textAlign: 'center'
+    },
+    label: {
+        fontSize: 12,
+        color: Colors.textLight,
+        marginTop: 10,
+        marginBottom: 5
+    },
+    input: {
+        borderWidth: 1,
+        borderColor: '#ddd',
+        borderRadius: 8,
+        padding: 10,
+        backgroundColor: '#f9f9f9'
+    },
+    modalActions: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 20
+    },
+    cancelBtn: {
+        padding: 15,
+    },
+    cancelText: {
+        color: Colors.error,
+        fontWeight: 'bold'
+    },
+    saveModalBtn: {
+        backgroundColor: Colors.primary,
+        paddingHorizontal: 30,
+        paddingVertical: 12,
+        borderRadius: 8
+    },
+    saveText: {
+        color: '#fff',
+        fontWeight: 'bold'
+    }
 });

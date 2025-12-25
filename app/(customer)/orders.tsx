@@ -1,29 +1,57 @@
+
 import React from 'react';
 import { FlatList, Image, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/auth';
 import { useData } from '../../context/data';
+import { Order } from '../../services/firestore';
 import { Colors } from '../../services/mock_api';
 
 export default function OrdersScreen() {
     const { user } = useAuth();
     const { orders, restaurants } = useData();
 
-    // Filter orders for the logged in user
-    const userOrders = orders.filter(o => o.userId === user?.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const userOrders = orders.filter(o => o.userId === user?.uid).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    // Helper to get restaurant image
     const getRestaurantImage = (restaurantId: string) => {
         const r = restaurants.find(res => res.id === restaurantId);
-        return r?.image || 'https://via.placeholder.com/100'; // Fallback
+        return r?.image || 'https://via.placeholder.com/100';
     };
+
+    const STEPS = ['Pending', 'Preparing', 'On the way', 'Delivered'];
+
+    const renderTracker = (status: string) => {
+        const currentStepIndex = STEPS.indexOf(status);
+        if (currentStepIndex === -1 && status !== 'Cancelled') return null;
+        if (status === 'Cancelled') return <Text style={{ color: Colors.error, fontWeight: 'bold', marginTop: 10 }}>Order Cancelled</Text>;
+
+        return (
+            <View style={styles.trackerContainer}>
+                {STEPS.map((step, index) => {
+                    const isActive = index <= currentStepIndex;
+                    return (
+                        <View key={step} style={styles.stepContainer}>
+                            <View style={[styles.stepDot, { backgroundColor: isActive ? Colors.primary : '#E0E0E0' }]} />
+                            {index < STEPS.length - 1 && (
+                                <View style={[styles.stepLine, { backgroundColor: index < currentStepIndex ? Colors.primary : '#E0E0E0' }]} />
+                            )}
+                            <Text style={[styles.stepLabel, { color: isActive ? Colors.text : Colors.textLight }]}>
+                                {step === 'On the way' ? 'Way' : step}
+                            </Text>
+                        </View>
+                    );
+                })}
+            </View>
+        );
+    };
+
     const renderOrderItem = ({ item }: { item: Order }) => (
         <View style={styles.orderCard}>
             <View style={styles.orderHeader}>
                 <Image source={{ uri: getRestaurantImage(item.restaurantId) }} style={styles.restaurantImage} />
                 <View style={styles.headerInfo}>
-                    <Text style={styles.restaurantName}>{item.restaurantName}</Text>
-                    <Text style={styles.dateText}>{new Date(item.date).toLocaleString()}</Text>
+                    <Text style={styles.restaurantName}>{item.restaurantName || "Restaurant"}</Text>
+                    <Text style={styles.dateText}>{new Date(item.createdAt).toLocaleString()}</Text>
                 </View>
                 <View style={[
                     styles.statusBadge,
@@ -38,9 +66,21 @@ export default function OrdersScreen() {
 
             <View style={styles.divider} />
 
+            <View style={styles.itemsList}>
+                {item.items.map((food, idx) => (
+                    <Text key={idx} style={styles.itemText}>
+                        {food.quantity}x {food.name} (${food.price})
+                    </Text>
+                ))}
+            </View>
+
+            <View style={styles.divider} />
+
+            {renderTracker(item.status)}
+
             <View style={styles.orderFooter}>
                 <Text style={styles.itemsText}>{item.items.reduce((acc, i) => acc + i.quantity, 0)} Items</Text>
-                <Text style={styles.totalText}>${item.totalAmount.toFixed(2)}</Text>
+                <Text style={styles.totalText}>${item.totalAmount?.toFixed(2)}</Text>
             </View>
         </View>
     );
@@ -132,11 +172,54 @@ const styles = StyleSheet.create({
         height: 1,
         backgroundColor: Colors.border,
         marginBottom: 12,
+        marginTop: 5
+    },
+    itemsList: {
+        marginBottom: 10
+    },
+    itemText: {
+        fontSize: 14,
+        color: Colors.text,
+    },
+    trackerContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: 15,
+        marginTop: 5,
+        paddingHorizontal: 10
+    },
+    stepContainer: {
+        alignItems: 'center',
+        width: 60,
+    },
+    stepDot: {
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        marginBottom: 4,
+        zIndex: 1
+    },
+    stepLine: {
+        position: 'absolute',
+        top: 5,
+        left: '50%',
+        width: '100%', // Span to next
+        height: 2,
+        zIndex: 0
+    },
+    stepLabel: {
+        fontSize: 10,
+        textAlign: 'center',
+        fontWeight: '600'
     },
     orderFooter: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        borderTopWidth: 1,
+        borderTopColor: Colors.border,
+        paddingTop: 10
     },
     itemsText: {
         fontSize: 14,

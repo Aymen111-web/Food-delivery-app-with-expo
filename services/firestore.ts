@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 
-// --- Types (re-using/adapting from previous data.tsx but aligned with Firestore) ---
+// --- Types ---
 
 export interface UserProfile {
     uid: string;
@@ -36,7 +36,7 @@ export interface Restaurant {
     rating?: number;
     categories: string[];
     deliveryTime: string;
-    image: string; // Changed from imageUrl to match previous code usage or mapped
+    image: string;
     isActive: boolean;
     createdAt?: any;
 }
@@ -73,7 +73,7 @@ export interface Order {
     deliveryAddress: string;
     status: 'Pending' | 'Preparing' | 'On the way' | 'Delivered' | 'Cancelled';
     createdAt: any;
-    restaurantId: string; // Keeping this for admin filtering
+    restaurantId: string;
     restaurantName: string;
 }
 
@@ -102,6 +102,15 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
         return docSnap.data() as UserProfile;
     }
     return null;
+};
+
+export const getAllUsers = async () => {
+    const snapshot = await getDocs(usersRef);
+    return snapshot.docs.map(doc => ({ ...doc.data() } as UserProfile));
+};
+
+export const toggleUserStatus = async (uid: string, isActive: boolean) => {
+    await updateDoc(doc(db, 'users', uid), { isActive });
 };
 
 // Restaurants
@@ -134,15 +143,40 @@ export const getCategories = async () => {
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category));
 };
 
+export const addCategory = async (name: string) => {
+    await addDoc(categoriesRef, { name, createdAt: serverTimestamp() });
+};
+
+export const updateCategory = async (id: string, name: string) => {
+    await updateDoc(doc(db, 'categories', id), { name });
+};
+
+export const deleteCategory = async (id: string) => {
+    await deleteDoc(doc(db, 'categories', id));
+};
+
 // Foods
 export const getFoodsByRestaurant = async (restaurantId: string) => {
-    const q = query(foodsRef, where('restaurantId', '==', restaurantId), where('isAvailable', '==', true));
+    const q = query(foodsRef, where('restaurantId', '==', restaurantId));
     const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FoodItem));
+};
+
+export const getAllFoods = async () => {
+    const snapshot = await getDocs(foodsRef);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FoodItem));
 };
 
 export const addFood = async (data: Omit<FoodItem, 'id'>) => {
     await addDoc(foodsRef, { ...data, createdAt: serverTimestamp() });
+};
+
+export const updateFood = async (id: string, data: Partial<FoodItem>) => {
+    await updateDoc(doc(db, 'foods', id), data);
+};
+
+export const deleteFood = async (id: string) => {
+    await deleteDoc(doc(db, 'foods', id));
 };
 
 // Orders
@@ -162,7 +196,6 @@ export const subscribeToUserOrders = (userId: string, callback: (orders: Order[]
             return {
                 id: doc.id,
                 ...data,
-                // Convert Firestore timestamp to Date if needed, or keep as object
                 createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date()
             } as Order;
         });
@@ -185,6 +218,6 @@ export const subscribeToAllOrders = (callback: (orders: Order[]) => void) => {
     });
 };
 
-export const updateOrderStatusService = async (orderId: string, status: Order.status) => {
+export const updateOrderStatusService = async (orderId: string, status: Order['status']) => {
     await updateDoc(doc(db, 'orders', orderId), { status });
 };

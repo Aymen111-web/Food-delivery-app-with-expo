@@ -1,17 +1,19 @@
+
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useData } from '../../context/data';
+import { UserProfile } from '../../services/firestore';
 import { Colors } from '../../services/mock_api';
 
 export default function AdminUsers() {
     const { users, toggleUserStatus } = useData();
     const router = useRouter();
 
-    const handleToggleStatus = (id: string) => {
-        toggleUserStatus(id);
+    const handleToggleStatus = (item: UserProfile) => {
+        toggleUserStatus(item.uid, !item.isActive);
     };
 
     const renderItem = ({ item }: { item: UserProfile }) => (
@@ -29,19 +31,19 @@ export default function AdminUsers() {
                     <View style={[styles.badge, { backgroundColor: item.role === 'admin' ? '#FF6B6B' : '#4ECDC4' }]}>
                         <Text style={styles.badgeText}>{item.role}</Text>
                     </View>
-                    <View style={[styles.badge, { backgroundColor: item.active ? '#2ECC71' : '#A4B0BE' }]}>
-                        <Text style={styles.badgeText}>{item.active ? 'Active' : 'Inactive'}</Text>
+                    <View style={[styles.badge, { backgroundColor: item.isActive ? '#2ECC71' : '#A4B0BE' }]}>
+                        <Text style={styles.badgeText}>{item.isActive ? 'Active' : 'Inactive'}</Text>
                     </View>
                 </View>
             </View>
             <TouchableOpacity
                 style={styles.actionBtn}
-                onPress={() => handleToggleStatus(item.id)}
+                onPress={() => handleToggleStatus(item)}
             >
                 <Ionicons
-                    name={item.active ? "ban-outline" : "checkmark-circle-outline"}
+                    name={item.isActive ? "ban-outline" : "checkmark-circle-outline"}
                     size={24}
-                    color={item.active ? Colors.error : Colors.success}
+                    color={item.isActive ? Colors.error : Colors.success}
                 />
             </TouchableOpacity>
         </View>
@@ -58,7 +60,7 @@ export default function AdminUsers() {
 
             <FlatList
                 data={users}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item) => item.uid}
                 contentContainerStyle={styles.list}
                 renderItem={renderItem}
             />

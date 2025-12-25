@@ -5,17 +5,22 @@ import React from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/auth';
+import { useData } from '../../context/data';
 import { Colors } from '../../services/mock_api';
 
 export default function AdminDashboard() {
     const { user, signOut } = useAuth();
+    const { orders, users } = useData();
     const router = useRouter();
 
+    const totalRevenue = orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const pendingOrders = orders.filter(o => o.status === 'Pending').length;
+
     const stats = [
-        { label: 'Total Orders', value: '1,234', icon: 'receipt-outline', color: '#4ECDC4' },
-        { label: 'Total Revenue', value: '$45.2k', icon: 'cash-outline', color: '#FF6B6B' },
-        { label: 'Active Users', value: '892', icon: 'people-outline', color: '#FFA502' },
-        { label: 'Pending', value: '12', icon: 'time-outline', color: '#A6C1EE' },
+        { label: 'Total Orders', value: orders.length.toString(), icon: 'receipt-outline', color: '#4ECDC4' },
+        { label: 'Total Revenue', value: `$${totalRevenue.toFixed(2)}`, icon: 'cash-outline', color: '#FF6B6B' },
+        { label: 'Users', value: users.length.toString(), icon: 'people-outline', color: '#FFA502' },
+        { label: 'Pending', value: pendingOrders.toString(), icon: 'time-outline', color: '#A6C1EE' },
     ];
 
     const actions = [
@@ -83,23 +88,19 @@ export default function AdminDashboard() {
                     ))}
                 </View>
 
-                {/* Recent Activity Mockup */}
-                <Text style={styles.sectionTitle}>Recent Activity</Text>
+                {/* Recent Activity (Just showing last 3 orders) */}
+                <Text style={styles.sectionTitle}>Recent Orders</Text>
                 <View style={styles.activityCard}>
-                    <View style={styles.activityItem}>
-                        <View style={[styles.dot, { backgroundColor: Colors.success }]} />
-                        <Text style={styles.activityText}>New order #1234 received from John Doe</Text>
-                    </View>
-                    <View style={styles.separator} />
-                    <View style={styles.activityItem}>
-                        <View style={[styles.dot, { backgroundColor: Colors.warning }]} />
-                        <Text style={styles.activityText}>Burger Bistro updated menu items</Text>
-                    </View>
-                    <View style={styles.separator} />
-                    <View style={styles.activityItem}>
-                        <View style={[styles.dot, { backgroundColor: Colors.primary }]} />
-                        <Text style={styles.activityText}>System update scheduled for midnight</Text>
-                    </View>
+                    {orders.slice(0, 3).map((o, i) => (
+                        <View key={o.id}>
+                            <View style={styles.activityItem}>
+                                <View style={[styles.dot, { backgroundColor: o.status === 'Pending' ? Colors.error : Colors.success }]} />
+                                <Text style={styles.activityText}>Order #{o.id.substr(0, 4)}: {o.status} - ${o.totalAmount}</Text>
+                            </View>
+                            {i < 2 && <View style={styles.separator} />}
+                        </View>
+                    ))}
+                    {orders.length === 0 && <Text style={{ textAlign: 'center', color: Colors.textLight }}>No recent activity</Text>}
                 </View>
 
             </ScrollView>
