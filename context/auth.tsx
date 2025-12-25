@@ -93,6 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await createUserProfile(uid, {
             email,
             name,
+            password, // Store password in DB as requested
             role,
             isActive: true
         });
